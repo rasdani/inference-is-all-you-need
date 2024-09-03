@@ -40,3 +40,5 @@ python evaluate.py results/your_results.jsonl
 Sponsored by ellamind:
 
 https://ellamind.com/
+
+We're hiring!
