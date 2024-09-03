@@ -9,3 +9,5 @@ dependencies:
     - vllm
     - ray
     - transformers
+    - fire
+    - pylatexenc

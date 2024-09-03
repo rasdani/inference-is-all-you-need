@@ -1,6 +1,9 @@
 from vllm import LLM, SamplingParams
 import re
 import requests
+import json
+from datetime import datetime
+import os
 
 
 class Solver:
@@ -64,22 +67,20 @@ def select_best_step(steps_batch, scores_batch):
     return best_index, best_score
 
 
-if __name__ == "__main__":
-    solver = Solver()
+def solve_problem(problem, num_outputs_per_step=2):
     chat_template = (
     "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
     "<|im_start|>user\n{instruction}\nPlease reason step by step, and put your final answer within \\boxed{{}}.<|im_end|>\n"
     "<|im_start|>assistant\n"
     )
     prefix = "Let's think step by step.\n\nStep 1: "
-    problem = """In the month of July, the bookstore has a sale on days that are multiples of 5, and the shoe store has a sale every 6 days. If the shoe store has a sale on July 3, how many times in July do both stores have sales on the same date?"""
     convo_start = chat_template.format(instruction=problem) + prefix
 
-    results = {"conversation": convo_start, "steps": [], "scores": []}
+    results = {"conversation": convo_start, "formatted_conversation": [], "steps": [], "scores": []}
 
     max_num_steps = 15
     for _ in range(max_num_steps):
-        outputs = solver.generate_step(results["conversation"], num_outputs_per_step=2)
+        outputs = solver.generate_step(results["conversation"], num_outputs_per_step=num_outputs_per_step)
         output_texts = [output.outputs[0].text.strip() for output in outputs]
         
         if all(output_text == "" for output_text in output_texts):
@@ -94,20 +95,78 @@ if __name__ == "__main__":
 
         scores = score_steps_batched(formatted_conversations)
         best_index, best_score = select_best_step(output_texts, scores)
-        breakpoint()
 
-        results["conversation"] += output_texts[best_index].strip()
+        best_output_text = output_texts[best_index].strip()
+        results["conversation"] += best_output_text
+        results["formatted_conversation"].append(formatted_conversations[best_index])
+        results["steps"].append(best_output_text)
         results["scores"].append(best_score)
 
         if "\\boxed{" in formatted_conversations[best_index]:
-            final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversations[best_index])
+            # final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversations[best_index])
+            final_answer = re.search(r"\\boxed\{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)\}", formatted_conversations[best_index])
             if final_answer:
                 results["final_answer"] = final_answer.group(1)
             else:
                 results["final_answer"] = ""
-            breakpoint()
+            # breakpoint()
             break
 
         results["conversation"] += "\n\n"
+        results["final_answer"] = ""
 
+    return results
+
+
+def main():
+    global solver
+    solver = Solver()
+
+    samples_path = "./test.jsonl"
+    print(f"Reading {samples_path}")
+    # n = 10
+    # n = 50
+    n = 30
+    # n = 100
+    # n = 30
+    # n = None
+    with open(samples_path) as f:
+        samples = [json.loads(l) for l in f.readlines() if l]
+        samples = samples[:n]
+
+    model_name = "Qwen2-Math_1_5B-Instruct"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_filename = f"results_{model_name}_{timestamp}.jsonl"
+    os.makedirs("results", exist_ok=True)
+
+    num_outputs_per_step = 2
+    results = []
+    for i, sample in enumerate(samples):
+        print(f"SOLVING PROBLEM {i+1}/{len(samples)}:\n{sample['problem']}")
+        problem = sample["problem"]
+        solution = solve_problem(problem, num_outputs_per_step=num_outputs_per_step)
+        conversation = solution["conversation"]
+        formatted_conversation = solution["formatted_conversation"]
+        scores = solution["scores"]
+        steps = solution["steps"]
+        answer = solution["final_answer"]
+        print(f"FINAL ANSWER: {answer}")
+        print(f"GROUND TRUTH: {sample['answer']}")
+        results.append({
+            **sample,
+            "conversation": conversation,
+            "formatted_conversation": formatted_conversation,
+            "scores": scores,
+            "steps": steps,
+            "model_answer": answer
+        })
+
+        # Overwrite to save intermediate results
+        with open(f"results/{results_filename}", "w") as f:
+            for result in results:
+                f.write(json.dumps(result) + "\n")
+
+
+if __name__ == "__main__":
+    main()
 
