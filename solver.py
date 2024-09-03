@@ -8,9 +8,10 @@ class Solver:
             temperature=0.7, 
             top_p=0.8, 
             repetition_penalty=1.05, 
-            # max_tokens=512, 
-            max_tokens=2048, 
+            max_tokens=512, 
+            # max_tokens=2048, 
             # stop=["Step"]
+            stop=["\n\n"]
         )
 
     def generate_step(self, conversation, num_outputs_per_step):
@@ -18,9 +19,10 @@ class Solver:
         return outputs
 
 def format_conversation_for_prm(conversation_string, problem_string):
-    breakpoint()
+    # breakpoint()
     steps_body = conversation_string.split("Let's think step by step.\n\n")[1]
     steps = steps_body.split("\n\n")
+    steps = [step for step in steps if step not in ["", " "]]
 
     # Process each step
     formatted_steps = []
@@ -62,10 +64,19 @@ if __name__ == "__main__":
         if all(output_text == "" for output_text in output_texts):
             continue
 
-        results["conversation"] += output_texts[0]
+        results["conversation"] += output_texts[0].strip()
         print(results["conversation"])
 
         formatted_conversation = format_conversation_for_prm(results["conversation"], problem)
-
-        if "\\boxed{" in output_texts[0]:
+        if "\\boxed{" in formatted_conversation:
+            final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversation)
+            if final_answer:
+                results["final_answer"] = final_answer.group(1)
+            else:
+                results["final_answer"] = ""
+            breakpoint()
             break
+
+        results["conversation"] += "\n\n"
+
+
