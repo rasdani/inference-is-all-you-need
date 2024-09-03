@@ -16,7 +16,7 @@ class Solver:
             max_tokens=512, 
             # max_tokens=2048, 
             # stop=["Step"]
-            stop=["\n\n"]
+            # stop=["\n\n"]
         )
 
     def generate_step(self, conversation, num_outputs_per_step):
@@ -78,7 +78,9 @@ def solve_problem(problem, num_outputs_per_step=2):
 
     results = {"conversation": convo_start, "formatted_conversation": [], "steps": [], "scores": []}
 
-    max_num_steps = 15
+    # max_num_steps = 15
+    max_num_steps = 1
+    num_outputs_per_step = 1
     for _ in range(max_num_steps):
         outputs = solver.generate_step(results["conversation"], num_outputs_per_step=num_outputs_per_step)
         output_texts = [output.outputs[0].text.strip() for output in outputs]
@@ -93,18 +95,21 @@ def solve_problem(problem, num_outputs_per_step=2):
             formatted_conversation = format_conversation_for_prm(current_conversation, problem)
             formatted_conversations.append(formatted_conversation)
 
-        scores = score_steps_batched(formatted_conversations)
-        best_index, best_score = select_best_step(output_texts, scores)
+        # scores = score_steps_batched(formatted_conversations)
+        # best_index, best_score = select_best_step(output_texts, scores)
 
-        best_output_text = output_texts[best_index].strip()
-        results["conversation"] += best_output_text
-        results["formatted_conversation"].append(formatted_conversations[best_index])
-        results["steps"].append(best_output_text)
-        results["scores"].append(best_score)
+        # best_output_text = output_texts[best_index].strip()
+        # results["conversation"] += best_output_text
+        # results["formatted_conversation"].append(formatted_conversations[best_index])
+        results["formatted_conversation"].append(formatted_conversations[0])
+        # results["steps"].append(best_output_text)
+        # results["scores"].append(best_score)
 
-        if "\\boxed{" in formatted_conversations[best_index]:
+        # if "\\boxed{" in formatted_conversations[best_index]:
+        if "\\boxed{" in formatted_conversations[0]:
             # final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversations[best_index])
-            final_answer = re.search(r"\\boxed\{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)\}", formatted_conversations[best_index])
+            # final_answer = re.search(r"\\boxed\{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)\}", formatted_conversations[best_index])
+            final_answer = re.search(r"\\boxed\{((?:[^{}]|{(?:[^{}]|{[^{}]*})*})*)\}", formatted_conversations[0])
             if final_answer:
                 results["final_answer"] = final_answer.group(1)
             else:
