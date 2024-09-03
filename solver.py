@@ -1,5 +1,7 @@
 from vllm import LLM, SamplingParams
 import re
+import requests
+
 
 class Solver:
     def __init__(self, model_name="Qwen/Qwen2-Math-1.5B-Instruct"):
@@ -18,6 +20,7 @@ class Solver:
         outputs = self.solver_llm.generate([conversation] * num_outputs_per_step, self.sampling_params)
         return outputs
 
+
 def format_conversation_for_prm(conversation_string, problem_string):
     # breakpoint()
     steps_body = conversation_string.split("Let's think step by step.\n\n")[1]
@@ -28,6 +31,7 @@ def format_conversation_for_prm(conversation_string, problem_string):
     formatted_steps = []
     for step in steps[:-1]:
         formatted_step = step.replace("\n", " ").strip()
+        formatted_step = formatted_step.replace("  ", " ")
         # add good tag to every line so far
         formatted_step += f" +"
         formatted_steps.append(formatted_step)
@@ -41,6 +45,24 @@ def format_conversation_for_prm(conversation_string, problem_string):
     result = problem_string + "\n" + "\n\n".join(formatted_steps)
 
     return result
+
+
+def score_steps_batched(conversations):
+    url = "http://localhost:8000/score_steps_batched"
+    response = requests.post(url, json={"conversations": conversations})
+    if response.status_code == 200:
+        return response.json()["scores"]
+    else:
+        raise Exception(f"Error scoring steps: {response.text}")
+
+
+
+def select_best_step(steps_batch, scores_batch):
+    best_score = max(scores_batch)
+    best_index = scores_batch.index(best_score)
+    # best_step = steps_batch[best_index]
+    return best_index, best_score
+
 
 if __name__ == "__main__":
     solver = Solver()
@@ -57,19 +79,28 @@ if __name__ == "__main__":
 
     max_num_steps = 15
     for _ in range(max_num_steps):
-        # breakpoint()
         outputs = solver.generate_step(results["conversation"], num_outputs_per_step=2)
         output_texts = [output.outputs[0].text.strip() for output in outputs]
         
         if all(output_text == "" for output_text in output_texts):
             continue
 
-        results["conversation"] += output_texts[0].strip()
-        print(results["conversation"])
 
-        formatted_conversation = format_conversation_for_prm(results["conversation"], problem)
-        if "\\boxed{" in formatted_conversation:
-            final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversation)
+        formatted_conversations = []
+        for output_text in output_texts:
+            current_conversation = results["conversation"] + output_text.strip()
+            formatted_conversation = format_conversation_for_prm(current_conversation, problem)
+            formatted_conversations.append(formatted_conversation)
+
+        scores = score_steps_batched(formatted_conversations)
+        best_index, best_score = select_best_step(output_texts, scores)
+        breakpoint()
+
+        results["conversation"] += output_texts[best_index].strip()
+        results["scores"].append(best_score)
+
+        if "\\boxed{" in formatted_conversations[best_index]:
+            final_answer = re.search(r"\\boxed\{(.*?)\}", formatted_conversations[best_index])
             if final_answer:
                 results["final_answer"] = final_answer.group(1)
             else:

@@ -14,6 +14,13 @@ class ConversationRequest(BaseModel):
 class ScoreResponse(BaseModel):
     score: float
 
+class ConversationBatchRequest(BaseModel):
+    conversations: List[str]
+
+class ScoreBatchResponse(BaseModel):
+    scores: List[float]
+
+
 app = FastAPI()
 
 class Verifier:
@@ -51,19 +58,27 @@ class Verifier:
         return scores_batch
 
 
-
-def select_best_step(steps_batch, scores_batch):
-    best_score = max(scores_batch)
-    best_index = scores_batch.index(best_score)
-    best_step = steps_batch[best_index]
-    return best_step, best_score
-
-
 @app.post("/score_step", response_model=ScoreResponse)
 def score_step(request: ConversationRequest):
     try:
-        score = verifier.score_step(request.conversation, request.current_step)
+        score = verifier.score_step(request.conversation)
         return ScoreResponse(score=score)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# @app.post("/score_steps_batched", response_model=List[ScoreResponse])
+# def score_steps_batched(request: ConversationRequest):
+#     try:
+#         scores = verifier.score_steps_batched(request.conversations)
+#         return [ScoreResponse(score=score) for score in scores]
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/score_steps_batched", response_model=ScoreBatchResponse)
+def score_steps_batched(request: ConversationBatchRequest):
+    try:
+        scores = verifier.score_steps_batched(request.conversations)
+        return ScoreBatchResponse(scores=scores)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -81,5 +96,5 @@ def debug():
 if __name__ == "__main__":
     global verifier
     verifier = Verifier()
-    # uvicorn.run(app, host="0.0.0.0", port=8000)
-    debug()
+    uvicorn.run(app, host="127.0.0.1", port=8000)
+    # debug()
