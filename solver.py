@@ -139,7 +139,7 @@ def main():
     results_filename = f"results_{model_name}_{timestamp}.jsonl"
     os.makedirs("results", exist_ok=True)
 
-    num_outputs_per_step = 2
+    num_outputs_per_step = 8
     results = []
     for i, sample in enumerate(samples):
         print(f"SOLVING PROBLEM {i+1}/{len(samples)}:\n{sample['problem']}")
